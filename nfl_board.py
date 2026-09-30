@@ -3561,8 +3561,6 @@ function renderNHL(board) {
 
   const priced = all.filter((r) => r.best.price != null && !r.out);
   const value = priced.filter((r) => r.best.edge >= 0.03).sort(byEdge);
-  const finished = all.filter((r) => r.hit !== null);
-  const done = finished.filter((r) => r.hasBook);   // only players Hard Rock actually offered a line on
   const top = all.filter((r) => !r.out && !(state.nhlHide && r.lik)).sort(stat === "sog" ? (a, b) => b.lam - a.lam : (a, b) => b.p - a.p)[0];
   const pill = (attr, k, l, cur) => `<button ${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`;
 
@@ -3573,8 +3571,7 @@ function renderNHL(board) {
       <div class="stat glass"><small>Games</small><b>${dayGames.length}</b></div>
       <div class="stat glass"><small>Priced props</small><b>${priced.length}</b></div>
       <div class="stat glass"><small>Value plays (3%+ edge)</small><b class="${value.length ? "up" : ""}">${value.length}</b></div>
-      ${finished.length ? `<div class="stat glass" title="Only players Hard Rock posted a line for"><small>Model vs results (Hard Rock lines)</small><b>${done.length ? `${done.filter((r) => r.hit).length}/${done.length} hit` : "No lines posted"}</b></div>`
-        : `<div class="stat glass"><small>${stat === "sog" ? "Most shots expected" : "Most likely"}</small><b style="font-size:1.1rem">${top ? `${esc(top.name)} ${stat === "sog" ? top.lam.toFixed(1) : pct(top.p)}` : "—"}</b></div>`}
+      <div class="stat glass"><small>${stat === "sog" ? "Most shots expected" : "Most likely"}</small><b style="font-size:1.1rem">${top ? `${esc(top.name)} ${stat === "sog" ? top.lam.toFixed(1) : pct(top.p)}` : "—"}</b></div>
     </div>
     <div class="gamepills" role="group" aria-label="Game">
       <button class="gpill" data-ng="all" aria-pressed="${state.nhlGame === "all"}" style="grid-template-columns:auto">All games<small>${dayGames.length} today</small></button>
