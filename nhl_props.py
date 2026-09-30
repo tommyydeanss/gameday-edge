@@ -27,6 +27,7 @@ ET = ZoneInfo("America/New_York")
 WEB = "https://api-web.nhle.com/v1"
 STATS = "https://api.nhle.com/stats/rest/en/skater/summary"
 TOI_REPORT = "https://api.nhle.com/stats/rest/en/skater/timeonice"
+REALTIME_REPORT = "https://api.nhle.com/stats/rest/en/skater/realtime"
 DFO = "https://www.dailyfaceoff.com"
 ODDS_BASE = "https://api.the-odds-api.com/v4/sports/icehockey_nhl"
 MARKETS = {"player_points": "pts", "player_shots_on_goal": "sog"}
@@ -69,6 +70,11 @@ P = dict(
     RINK_K=60.0,       # games of neutral rink mixed into each rink's factor
     PP_B=0.15,         # PP minutes x (opponent's penalty-kill minutes per game / league)^PP_B
     PP_K=40.0,         # games of league average mixed into each team's PK minutes
+    # Hard Rock game lines (added Oct 1): expected team goals implied by the moneyline + total
+    S_KA=4.5,          # hours of role prior mixed into a player's shot ATTEMPTS per weighted hour (added Oct 1)
+    K_C=400.0,         # attempts of his position's shots-on-goal share mixed into his own share
+    MKT_W=0.5,         # points x (market team goals / model team goals)^MKT_W; can't be backtested (no past lines), so half weight
+    MKT_CAP=0.15,      # never move a projection more than +-15% for this
 )
 
 
@@ -88,8 +94,9 @@ class State:
     def new_season(self):
         w = self.p["PREV_W"]
         for s in self.pl.values():
-            for k in ("evs", "pps", "evp", "ppp", "tw", "tev", "tpp", "sh", "shw"):
-                s[k] *= w
+            for k in ("evs", "pps", "evp", "ppp", "tw", "tev", "tpp", "sh", "shw", "at", "shr"):
+                if k in s:
+                    s[k] *= w
             s["season_n"], s["recent"] = 0, []
         for t in self.tm.values():
             for k in ("w", "gf", "ga", "sf", "sa", "pp", "sh"):
@@ -103,6 +110,8 @@ class State:
         fit = {}
         for g in ("F", "D"):
             xs, ys, ws, zs, pn, pd = [], [], [], [], 0.0, 0.0
+            grp_sh = sum(s.get("shr", 0.0) for s in self.pl.values() if grp_of(s["pos"]) == g)
+            grp_at = sum(s.get("at", 0.0) for s in self.pl.values() if grp_of(s["pos"]) == g)
             for s in self.pl.values():
                 if grp_of(s["pos"]) != g or s["evs"] < 3600 * 5:
                     continue
@@ -121,7 +130,7 @@ class State:
                 b = cxy / vx if vx else 0.0
                 return my - b * mx, b
             a, b = line(ys)
-            fit[g] = (a, b, pn / pd if pd else 4.0, line(zs))
+            fit[g] = (a, b, pn / pd if pd else 4.0, line(zs), grp_sh / grp_at if grp_at else 0.52)
         self.fit = fit
 
     def rink(self, venue):
@@ -171,7 +180,7 @@ class State:
             lmf = lmq / (s["lmq"] / s["lmw"])
         rook_s = 1 - (0 if top else p["RK_S"]) * fresh
         rook_p = 1 - (0 if top else p["RK_P"]) * fresh
-        a, b, ppr, sfit = (self.fit or {}).get(g, (2.0 if g == "F" else 0.9, 0.0, 4.0, (8.0 if g == "F" else 5.0, 0.0)))
+        a, b, ppr, sfit, conv_g = (self.fit or {}).get(g, (2.0 if g == "F" else 0.9, 0.0, 4.0, (8.0 if g == "F" else 5.0, 0.0), 0.52))
         r_ev = ((s["evp"] if s else 0) + p["K_EV"] * max(0.2, a + b * ev_m) * rook_p) / ((s["evs"] / 3600 if s else 0) + p["K_EV"])
         r_pp = ((s["ppp"] if s else 0) + p["K_PP"] * ppr) / ((s["pps"] / 3600 if s else 0) + p["K_PP"])
         t = self.tm.get(opp)
@@ -182,7 +191,12 @@ class State:
         # shots on goal: shots per "weighted" minute (PP minutes count S_PPW x), shrunk toward a role prior
         wmin = ev_m + p["S_PPW"] * pp_m
         prior_s = max(0.5, sfit[0] + sfit[1] * ev_m) * rook_s
-        r_s = ((s["sh"] if s else 0) + p["S_K"] * prior_s) / ((s["shw"] / 3600 if s else 0) + p["S_K"])
+        # shot rate built from shot ATTEMPTS (shots on goal + missed + blocked: steadier than shots alone) x his
+        # share of attempts that reach the net; both shrunk toward his role / position (backtest Oct 1: 0.4371 -> 0.4365)
+        at_ = s.get("at", 0.0) if s else 0.0
+        r_a = (at_ + p["S_KA"] * prior_s / conv_g) / ((s["shw"] / 3600 if s else 0) + p["S_KA"])
+        conv = ((s.get("shr", 0.0) if s else 0) + p["K_C"] * conv_g) / (at_ + p["K_C"])
+        r_s = r_a * conv
         W = sum(x["w"] for x in self.tm.values()) or 1
         spg = sum(x["sf"] for x in self.tm.values()) / W or 29.0
         def rate(t_, k):
@@ -212,7 +226,7 @@ class State:
         ds = (self.tm.get(team) or {}).get("dates") or []
         return bool(ds) and ds[-1] == (date.fromisoformat(day) - timedelta(days=1)).isoformat()
 
-    def update_player(self, r, split, lmq=None, rkf=1.0):
+    def update_player(self, r, split, lmq=None, rkf=1.0, att=None):
         """r = skater-game row; split = (ev_sec, pp_sec, sh_sec) or None."""
         pid, name, team, pos = r[2], r[3], r[4], r[7]
         g, a, pts, sog, pp_pts, toi = r[8], r[9], r[10], r[11], r[12], r[13]
@@ -223,6 +237,8 @@ class State:
             s = self.pl[pid] = dict(evs=0.0, pps=0.0, evp=0.0, ppp=0.0, tw=0.0, tev=0.0, tpp=0.0, sh=0.0, shw=0.0, n=0, season_n=0, recent=[])
         for k in ("evs", "pps", "evp", "ppp", "sh", "shw"):
             s[k] *= p["DECAY"]
+        s["at"] = s.get("at", 0.0) * p["DECAY"] + (att if att is not None else sog)
+        s["shr"] = s.get("shr", 0.0) * p["DECAY"] + sog
         s["sh"] += sog / rkf; s["shw"] += (ev + sh) + p["S_PPW"] * pp
         s["evs"] += ev + sh; s["pps"] += pp
         s["ppp"] += pp_pts; s["evp"] += pts - pp_pts
@@ -349,6 +365,19 @@ def skater_games(season, today):
     rows = _season_report("skaters", STATS, _summary_row, season, today)
     rows.sort(key=lambda r: (r[1], r[0]))
     return rows
+
+
+def _realtime_row(r):
+    return [r["gameId"], r["playerId"], r.get("totalShotAttempts") or 0]
+
+
+def shot_attempts(season, today):
+    """{(gameId, playerId): total shot attempts} (shots on goal + missed + blocked)."""
+    try:
+        return {(r[0], r[1]): r[2] for r in _season_report("attempts", REALTIME_REPORT, _realtime_row, season, today)}
+    except Exception as e:   # nice-to-have: the model falls back to shots on goal
+        print(f"NHL: shot attempts unavailable ({e}); using shots on goal only.")
+        return {}
 
 
 def toi_splits(season, today):
@@ -725,8 +754,89 @@ def fetch_game_lines(api_key, book, games, names):
     return out, f"NHL: Hard Rock game lines for {len(out)} games" + (f"; {left} credits left" if left else "") + "."
 
 
+def _pois_cdf(k, lam):
+    term = cdf = math.exp(-lam)
+    for i in range(1, k + 1):
+        term *= lam / i; cdf += term
+    return cdf
+
+
+def _no_vig(a, b):
+    ia = 100 / (a + 100) if a > 0 else -a / (-a + 100)
+    ib = 100 / (b + 100) if b > 0 else -b / (-b + 100)
+    return ia / (ia + ib)
+
+
+def implied_team_goals(gl, home, away):
+    """(home goals, away goals) implied by Hard Rock's total and moneyline, or None.
+    Total: the Poisson mean whose chance of going over the line matches the no-vig Over price.
+    Split: the share of that total that makes the home team's win chance match the no-vig moneyline
+    (regulation ties count half, since overtime is close to a coin flip)."""
+    tot, ml = gl.get("tot"), gl.get("ml") or {}
+    if not tot or tot[0] is None or tot[1] is None or tot[2] is None or ml.get(home) is None or ml.get(away) is None:
+        return None
+    line, p_over, p_home = float(tot[0]), _no_vig(tot[1], tot[2]), _no_vig(ml[home], ml[away])
+    k = int(math.floor(line))
+    lo, hi = 2.0, 12.0
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        po = 1 - _pois_cdf(k, mid)
+        if abs(line - k) < 1e-9:            # whole-number total: a push is possible, compare over vs over+under
+            po = po / (1 - (_pois_cdf(k, mid) - _pois_cdf(k - 1, mid)))
+        lo, hi = (mid, hi) if po < p_over else (lo, mid)
+    total = (lo + hi) / 2
+
+    def home_win(share):
+        lh, la = total * share, total * (1 - share)
+        ph = [math.exp(-lh)]; pa = [math.exp(-la)]
+        for i in range(1, 16):
+            ph.append(ph[-1] * lh / i); pa.append(pa[-1] * la / i)
+        win = sum(ph[i] * sum(pa[:i]) for i in range(16))
+        tie = sum(ph[i] * pa[i] for i in range(16))
+        return win + tie / 2
+    lo, hi = 0.2, 0.8
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if home_win(mid) < p_home else (lo, mid)
+    share = (lo + hi) / 2
+    return total * share, total * (1 - share)
+
+
+def model_team_goals(st, team, opp, home):
+    """What the model's team ratings expect this team to score tonight (for comparing with the market)."""
+    p, tm = st.p, st.tm
+    W = sum(t["w"] for t in tm.values()) or 1
+    lg = sum(t["gf"] for t in tm.values()) / W or 3.0
+    K = p["TEAM_K"]
+    own, o = tm.get(team), tm.get(opp)
+    off = (own["gf"] + K * lg) / (own["w"] + K) / lg if own else 1.0
+    dfn = (o["ga"] + K * lg) / (o["w"] + K) / lg if o else 1.0
+    return lg * off * dfn * (p["HOME"] if home else 1 / p["HOME"])
+
+
+def apply_market(st, games, proj, game_lines):
+    """Nudge upcoming points projections toward the team goals Hard Rock's game lines imply."""
+    p = st.p
+    for g in games:
+        gl, rows = game_lines.get(str(g["id"])), proj.get(g["id"]) or proj.get(str(g["id"]))
+        if not gl or not rows or any(r.get("res") for r in rows):
+            continue
+        imp = implied_team_goals(gl, g["home"], g["away"])
+        if not imp:
+            continue
+        fac = {}
+        for team, opp, home, goals in ((g["home"], g["away"], True, imp[0]), (g["away"], g["home"], False, imp[1])):
+            f = (goals / model_team_goals(st, team, opp, home)) ** p["MKT_W"]
+            fac[team] = max(1 - p["MKT_CAP"], min(1 + p["MKT_CAP"], f))
+        g["implied"] = {g["home"]: round(imp[0], 2), g["away"]: round(imp[1], 2)}
+        for r in rows:
+            f = fac.get(r["team"], 1.0)
+            r["pts"] = round(r["pts"] * f, 4)
+            r["mkt"] = round(f, 3)
+
+
 # ---------------------------------------------------------------- build
-def _replay(st, rows, splits, snap_from, snaps):
+def _replay(st, rows, splits, snap_from, snaps, att=None):
     """Feed rows (sorted by date) into the model; record pre-game projections for games on/after snap_from."""
     by_game = {}
     for r in rows:
@@ -753,7 +863,7 @@ def _replay(st, rows, splits, snap_from, snaps):
                            ppt[t], sht[t])
         rkf = st.rink(venue) if venue else 1.0
         for r in grp:
-            st.update_player(r, splits.get((r[0], r[2])), lmq.get(r[2]), rkf)
+            st.update_player(r, splits.get((r[0], r[2])), lmq.get(r[2]), rkf, (att or {}).get((r[0], r[2])))
 
 
 def _linemate_q(st, members):
@@ -825,6 +935,9 @@ def build(odds_key=None, book="hardrockbet_fl", odds_date=None, fetch_odds_now=T
     splits = {}
     for s_ in (prev2, prev, season):
         splits.update(toi_splits(s_, today))
+    att = {}
+    for s_ in (prev2, prev, season):
+        att.update(shot_attempts(s_, today))
     typ = slot_minutes(prev_rows + cur_rows, splits)
     first, last = today - timedelta(days=PAST_DAYS), today + timedelta(days=AHEAD_DAYS)
     if odds_date:
@@ -836,12 +949,12 @@ def build(odds_key=None, book="hardrockbet_fl", odds_date=None, fetch_odds_now=T
     roster = rosters(season, roster_goalies)
 
     st = State()
-    _replay(st, prev2_rows, splits, None, None)   # two seasons back, so players who missed last season keep their history
+    _replay(st, prev2_rows, splits, None, None, att)   # two seasons back, so players who missed last season keep their history
     st.new_season()
-    _replay(st, prev_rows, splits, None, None)
+    _replay(st, prev_rows, splits, None, None, att)
     st.new_season()
     snaps = {}
-    _replay(st, cur_rows, splits, first.isoformat(), snaps)
+    _replay(st, cur_rows, splits, first.isoformat(), snaps, att)
     st.fit_priors()
 
     names = {}
@@ -936,6 +1049,7 @@ def build(odds_key=None, book="hardrockbet_fl", odds_date=None, fetch_odds_now=T
         except requests.RequestException as e:
             status.append(f"NHL game lines unavailable ({e}).")
     game_lines = {gid: v for gid, v in game_lines.items() if any(str(g["id"]) == gid for g in games)}
+    apply_market(st, [g for g in games if g in upcoming], proj, game_lines)
     odds, odds_times = {}, {}
     for gid, rows in proj.items():
         c = odds_cache.get(gid)
