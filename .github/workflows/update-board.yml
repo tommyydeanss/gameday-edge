@@ -1,0 +1,86 @@
+name: Update GameDay Edge board
+
+on:
+  schedule:
+    - cron: "7 */3 * * *"   # every 3 hours: stats, DailyFaceoff lines, goalies, projections (no odds credits)
+    - cron: "0 19 * * *"    # 3 PM Eastern while daylight time is on  -> also pulls Hard Rock odds
+    - cron: "0 20 * * *"    # 3 PM Eastern while standard time is on  -> also pulls Hard Rock odds
+  workflow_dispatch:
+    inputs:
+      odds:
+        description: "Also pull Hard Rock odds for today's games (uses Odds API credits)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: gameday-board
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      # Keep downloaded season stats and earlier odds between runs (so non-odds runs still show the 3 PM odds)
+      - uses: actions/cache/restore@v4
+        with:
+          path: .nfl_cache
+          key: board-cache-${{ github.run_id }}
+          restore-keys: board-cache-
+
+      - name: Decide whether this run buys odds
+        id: mode
+        env:
+          SCHED: ${{ github.event.schedule }}
+          MANUAL: ${{ inputs.odds }}
+        run: |
+          python - >> "$GITHUB_OUTPUT" <<'PY'
+          import os, datetime, zoneinfo
+          s, manual = os.environ.get("SCHED", ""), os.environ.get("MANUAL", "")
+          dst = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York")).utcoffset() == datetime.timedelta(hours=-4)
+          odds = manual == "true" or (s == "0 19 * * *" and dst) or (s == "0 20 * * *" and not dst)
+          print("odds=" + ("yes" if odds else "no"))
+          PY
+
+      - name: Build the board
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          if [ "${{ steps.mode.outputs.odds }}" = "yes" ] && [ -n "$ODDS_API_KEY" ]; then
+            python nfl_board.py --no-open --shared --odds-today --out site/index.html
+          else
+            python nfl_board.py --no-open --shared --no-odds --out site/index.html
+          fi
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .nfl_cache
+          key: board-cache-${{ github.run_id }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
