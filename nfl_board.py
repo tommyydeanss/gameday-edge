@@ -2395,6 +2395,38 @@ input.oin[data-nm] { width: 6.5em; }
 .prob b { font-size: 1.35rem; white-space: nowrap; }
 .ticket .val span { font-size: 0.74rem; text-align: right; }
 .ticket .bet { color: var(--ink-2); }
+
+/* ================= compact solid top bar (Oct 2026) ================= */
+.masthead { background: linear-gradient(180deg, #2e1d12 0%, #22160e 100%) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  border: 1px solid rgba(255, 190, 140, 0.16); box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+@media (min-width: 861px) {
+  .masthead { top: 0; margin: 0; width: 100%; max-width: none; border-radius: 0; border-width: 0 0 1px 0;
+    padding: 10px max(24px, calc((100% - 1232px) / 2)) 10px; display: grid; align-items: center; column-gap: 14px; row-gap: 8px;
+    grid-template-columns: auto auto auto minmax(0, auto) auto 1fr auto; }
+  .mast-in, .datenav { display: contents; }
+  .brand { grid-area: 1 / 1; }
+  .sportbar { grid-area: 1 / 2; padding: 0; }
+  #prev { grid-area: 1 / 3; } .dateblock { grid-area: 1 / 4; min-width: 0; } #next { grid-area: 1 / 5; }
+  .refresh { grid-area: 1 / 7; }
+  .navrow { grid-area: 2 / 1 / 3 / 6; padding: 0; min-width: 0; }
+  .datetools { grid-area: 2 / 6 / 3 / 8; justify-self: end; margin: 0; }
+  .brand-mark { width: 32px; height: 32px; }
+  .brand-name { font-size: 1.05rem; } .brand-sub { font-size: 0.54rem; letter-spacing: 0.2em; }
+  .sportbar .sport { padding: 3px; gap: 2px; }
+  .sportbar .sport button { padding: 4px 16px 4px 4px; font-size: 0.86rem; gap: 8px; }
+  .slogo { width: 26px; height: 26px; } .slogo img { width: 19px; height: 19px; }
+  .dateline { font-size: 1.22rem !important; line-height: 1.1; }
+  .slate { font-size: 0.74rem; }
+  .arrow, .settings summary { width: 32px; height: 32px; }
+  button.primary { padding: 7px 18px; font-size: 0.88rem; }
+  .views { padding: 3px; }
+  .tabs button { padding: 6px 14px; font-size: 0.84rem; }
+  .ghost, .datetools input[type=date] { padding: 6px 12px; font-size: 0.8rem; }
+  .datetools input[type=date] { padding: 5px 10px; }
+  html { scroll-padding-top: 120px; }
+  .wrap { padding-top: 18px; }
+}
+@media (min-width: 861px) and (max-width: 1100px) { .brand-text { display: none; } .brand { display: flex !important; } }
 </style>
 </head>
 <body data-sport="nhl">
@@ -3722,11 +3754,15 @@ function linesTag(g) {
   const firm = L.filter((x) => x.kind === "confirmed" || x.kind === "reported").length;
   return firm === L.length ? " · lines reported" : firm ? " · lines partly reported" : " · lines projected";
 }
+function probColor(p, a = 1) {
+  // red at 0% -> yellow at 50% -> green at 100%
+  const v = Math.max(0, Math.min(1, p || 0));
+  return `hsla(${Math.round(120 * v)}, 78%, ${Math.round(52 + 6 * Math.sin(Math.PI * v))}%, ${a})`;
+}
 function ring(p) {
   const R = 30, C = 2 * Math.PI * R, v = Math.max(0, Math.min(1, p));
   return `<div class="ring" role="img" aria-label="${pct(p)} chance"><svg viewBox="0 0 76 76" aria-hidden="true">
-    <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc07a"/><stop offset="1" stop-color="#f0641c"/></linearGradient></defs>
-    <circle cx="38" cy="38" r="${R}" class="ring-bg"/><circle cx="38" cy="38" r="${R}" class="ring-fg" stroke-dasharray="${(C * v).toFixed(1)} ${C.toFixed(1)}"/></svg>
+    <circle cx="38" cy="38" r="${R}" class="ring-bg"/><circle cx="38" cy="38" r="${R}" class="ring-fg" style="stroke:${probColor(v)};filter:drop-shadow(0 0 5px ${probColor(v, 0.55)})" stroke-dasharray="${(C * v).toFixed(1)} ${C.toFixed(1)}"/></svg>
     <b>${Math.round(v * 100)}<small>%</small></b></div>`;
 }
 function bigPhoto(r) {
@@ -3819,7 +3855,7 @@ function nhlRow(r, stat) {
       <div class="statpills">${luChips(r)}<span>TOI <b>${r.toi.toFixed(1)}</b>${r.toi0 != null && Math.abs(r.toi - r.toi0) >= 0.5 ? ` <small>(${r.toi > r.toi0 ? "up" : "down"} from ${r.toi0.toFixed(1)})</small>` : ""}</span>${stat === "sog" ? (r.s10?.length ? `<span>Last ${r.s10.length}: <b>${r.s10.join(" ")}</b> SOG</span>` : "")
         : (r.l10[2] ? `<span>Last ${r.l10[2]}: <b>${r.l10[0]}</b> pts, <b>${r.l10[1]}</b> ast</span>` : "")}${r.b2b ? `<span class="warnpill">Back-to-back</span>` : ""}${flags.join("")}</div>
       ${result}${!isFinal ? `<button class="mini" data-nout="${esc(r.key)}" title="Hide this player (scratched or injured)">Mark out</button>` : ""}</div></div></td>
-    <td><div class="prob"><b>${pct(r.p)}</b><div class="pbar"><i style="width:${Math.min(100, r.p * 100).toFixed(1)}%"></i></div></div>
+    <td><div class="prob"><b>${pct(r.p)}</b><div class="pbar"><i style="width:${Math.min(100, r.p * 100).toFixed(1)}%;background:${probColor(r.p)};box-shadow:0 0 12px ${probColor(r.p, 0.5)}"></i></div></div>
       <span class="sub">Fair ${fairOdds(r.p)} · expects ${r.lam.toFixed(2)} ${unit}</span>
       <span class="sub">${stat === "sog" ? `${(r.s60 ?? 0).toFixed(2)} SOG per 60 · opp/team factor ${(r.senv ?? 1).toFixed(2)}` : `${r.p60.toFixed(2)} per 60 · opp factor ${r.env.toFixed(2)}`}</span>
       ${(() => { const F = nhlFactors(r); return `<span class="sub">Linemates ${factorPct(F.lm)} · PP chances ${factorPct(F.pp)}${stat === "sog" ? ` · rink ${factorPct(F.rink)}` : (r.mkt ? ` · Hard Rock game line ${factorPct(F.mkt)}` : "")}</span>`; })()}</td>
