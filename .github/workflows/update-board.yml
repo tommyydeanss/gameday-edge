@@ -3,8 +3,8 @@ name: Update GameDay Edge board
 on:
   schedule:
     - cron: "7 */3 * * *"   # every 3 hours: stats, DailyFaceoff lines, goalies, projections (no odds credits)
-    - cron: "0 19 * * *"    # 3 PM Eastern while daylight time is on  -> also pulls Hard Rock odds
-    - cron: "0 20 * * *"    # 3 PM Eastern while standard time is on  -> also pulls Hard Rock odds
+    - cron: "50 18 * * *"   # 2:50 PM Eastern while daylight time is on (GitHub usually starts it a few minutes late)  -> also pulls Hard Rock odds
+    - cron: "50 19 * * *"   # 2:50 PM Eastern while standard time is on  -> also pulls Hard Rock odds
   workflow_dispatch:
     inputs:
       odds:
@@ -51,7 +51,7 @@ jobs:
           import os, datetime, zoneinfo
           s, manual = os.environ.get("SCHED", ""), os.environ.get("MANUAL", "")
           dst = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York")).utcoffset() == datetime.timedelta(hours=-4)
-          odds = manual == "true" or (s == "0 19 * * *" and dst) or (s == "0 20 * * *" and not dst)
+          odds = manual == "true" or (s == "50 18 * * *" and dst) or (s == "50 19 * * *" and not dst)
           print("odds=" + ("yes" if odds else "no"))
           PY
 
