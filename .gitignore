@@ -1,0 +1,5 @@
+.nfl_cache/
+site/
+nfl_board_config.json
+*.log
+__pycache__/
