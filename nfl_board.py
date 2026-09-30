@@ -9,7 +9,7 @@ Easiest: run it as your one-stop board (double-click "Start NFL Board" or run):
 Or build a standalone file whenever you want fresh numbers:
 
     pip install requests
-    python nfl_board.py                  # current season, opens nfl_board.html
+    python nfl_board.py                  # current season, opens GameDayBoard.html
     python nfl_board.py --season 2025    # a past season
     python nfl_board.py --no-open        # just write the file
 
@@ -1613,7 +1613,7 @@ def main():
     cfg = load_config()
     parser = argparse.ArgumentParser(description="Build the NFL Game Day Board")
     parser.add_argument("--season", type=int, default=now.year if now.month >= 3 else now.year - 1)
-    parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "nfl_board.html"))
+    parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "GameDayBoard.html"))
     parser.add_argument("--no-open", action="store_true")
     parser.add_argument("--serve", action="store_true",
                         help="Run the board at http://localhost:8765 with a working Refresh button")
