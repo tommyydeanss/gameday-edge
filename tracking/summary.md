@@ -1,37 +1,38 @@
 # NHL props vs Hard Rock: results so far
 
-Updated Oct 04, 2026 01:13 AM ET. Every player Hard Rock priced is logged; the pick is the side (Over or Under) the model rated better at Hard Rock's price. Profit assumes $100 on every pick.
+Updated Oct 04, 2026 07:32 AM ET. Every player Hard Rock priced is logged; the pick is the side (Over or Under) the model rated better at Hard Rock's price. Profit assumes $100 on every pick.
 
 ## Record
 
 | Group | Picks | W-L | Win % | Profit ($100 each) | ROI |
 |---|---|---|---|---|---|
-| All | 478 | 233-245 | 48.7% | -3,359 | -7.0% |
-| Points | 240 | 112-128 | 46.7% | -1,751 | -7.3% |
-| Shots | 238 | 121-117 | 50.8% | -1,608 | -6.8% |
-| Over picks | 246 | 110-136 | 44.7% | -2,780 | -11.3% |
-| Under picks | 232 | 123-109 | 53.0% | -579 | -2.5% |
+| All | 546 | 264-282 | 48.4% | -4,320 | -7.9% |
+| Points | 274 | 125-149 | 45.6% | -2,533 | -9.2% |
+| Shots | 272 | 139-133 | 51.1% | -1,787 | -6.6% |
+| Over picks | 266 | 118-148 | 44.4% | -3,189 | -12.0% |
+| Under picks | 280 | 146-134 | 52.1% | -1,131 | -4.0% |
 
 ## By model edge
 
 | Group | Picks | W-L | Win % | Profit ($100 each) | ROI |
 |---|---|---|---|---|---|
-| Negative edge | 235 | 116-119 | 49.4% | -1,576 | -6.7% |
-| 0-3% | 126 | 53-73 | 42.1% | -2,173 | -17.2% |
-| 3-6% (value plays) | 70 | 37-33 | 52.9% | -119 | -1.7% |
-| 6-10% | 36 | 18-18 | 50.0% | +47 | +1.3% |
-| 10%+ | 11 | 9-2 | 81.8% | +462 | +42.0% |
+| Negative edge | 252 | 123-129 | 48.8% | -1,960 | -7.8% |
+| 0-3% | 147 | 61-86 | 41.5% | -2,761 | -18.8% |
+| 3-6% (value plays) | 87 | 48-39 | 55.2% | +275 | +3.2% |
+| 6-10% | 41 | 19-22 | 46.3% | -276 | -6.7% |
+| 10%+ | 19 | 13-6 | 68.4% | +402 | +21.2% |
 
 ## Calibration (does 'X% chance' happen X% of the time?)
 
 | Market | Model chance of Over | Props | Actual Over rate | Hard Rock no-vig |
 |---|---|---|---|---|
-| points | 20%-40% | 58 | 43.1% | 37.2% |
-| points | 40%-60% | 158 | 50.0% | 48.0% |
-| points | 60%-80% | 24 | 41.7% | 60.9% |
-| shots | 0%-20% | 1 | 0.0% | 38.2% |
-| shots | 20%-40% | 54 | 38.9% | 44.5% |
-| shots | 40%-60% | 155 | 43.2% | 49.8% |
-| shots | 60%-80% | 28 | 60.7% | 57.4% |
+| points | 0%-20% | 1 | 100.0% | 62.5% |
+| points | 20%-40% | 73 | 45.2% | 37.0% |
+| points | 40%-60% | 175 | 49.1% | 48.4% |
+| points | 60%-80% | 25 | 44.0% | 61.0% |
+| shots | 0%-20% | 2 | 0.0% | 43.6% |
+| shots | 20%-40% | 65 | 40.0% | 44.7% |
+| shots | 40%-60% | 172 | 43.6% | 50.0% |
+| shots | 60%-80% | 33 | 60.6% | 57.4% |
 
-Settled props: 478. Waiting for results: 2. Small samples swing a lot; judge after a few hundred settled picks.
+Settled props: 546. Waiting for results: 2. Small samples swing a lot; judge after a few hundred settled picks.
