@@ -3,8 +3,7 @@ name: Update GameDay Edge board
 on:
   schedule:
     - cron: "7 */3 * * *"   # every 3 hours: stats, DailyFaceoff lines, goalies, projections (no odds credits)
-    - cron: "50 18 * * *"   # 2:50 PM Eastern while daylight time is on (GitHub usually starts it a few minutes late)  -> also pulls Hard Rock odds
-    - cron: "50 19 * * *"   # 2:50 PM Eastern while standard time is on  -> also pulls Hard Rock odds
+    - cron: "5,25,45 18-23 * * *"   # afternoon checks: the first run at or after 2:45 PM Eastern pulls Hard Rock odds (once a day); the rest stop early
   workflow_dispatch:
     inputs:
       odds:
@@ -25,6 +24,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      skip: ${{ steps.mode.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,23 +51,32 @@ jobs:
           python - >> "$GITHUB_OUTPUT" <<'PY'
           import os, datetime, zoneinfo
           s, manual = os.environ.get("SCHED", ""), os.environ.get("MANUAL", "")
-          dst = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York")).utcoffset() == datetime.timedelta(hours=-4)
-          odds = manual == "true" or (s == "50 18 * * *" and dst) or (s == "50 19 * * *" and not dst)
+          now = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+          # GitHub often starts scheduled runs late, so odds are bought by the clock, not by which schedule fired:
+          # the first run at or after 2:45 PM Eastern buys them, and a marker file stops a second purchase that day.
+          bought = os.path.exists(f".nfl_cache/odds_bought_{now:%Y-%m-%d}")
+          due = (now.hour, now.minute) >= (14, 45)
+          odds = manual == "true" or (bool(s) and due and not bought)
+          skip = not odds and s == "5,25,45 18-23 * * *"
           print("odds=" + ("yes" if odds else "no"))
+          print("skip=" + ("yes" if skip else "no"))
           PY
 
       - name: Build the board
+        if: steps.mode.outputs.skip != 'yes'
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: |
           if [ "${{ steps.mode.outputs.odds }}" = "yes" ] && [ -n "$ODDS_API_KEY" ]; then
             python nfl_board.py --no-open --shared --odds-today --out site/index.html
+            mkdir -p .nfl_cache && rm -f .nfl_cache/odds_bought_* && touch ".nfl_cache/odds_bought_$(TZ=America/New_York date +%F)"
           else
             python nfl_board.py --no-open --shared --no-odds --out site/index.html
           fi
 
       # Results tracking: kept in the repository's tracking/ folder, never published on the site
       - name: Update results tracking
+        if: steps.mode.outputs.skip != 'yes'
         continue-on-error: true     # a tracking hiccup must never stop the board from publishing
         run: |
           python track.py site/index.html tracking
@@ -80,17 +90,19 @@ jobs:
           fi
 
       - uses: actions/cache/save@v4
-        if: always()
+        if: always() && steps.mode.outputs.skip != 'yes'
         with:
           path: .nfl_cache
           key: board-cache-${{ github.run_id }}
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.mode.outputs.skip != 'yes'
         with:
           path: site
 
   deploy:
     needs: build
+    if: needs.build.outputs.skip != 'yes'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
