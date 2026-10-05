@@ -3,7 +3,7 @@ name: Update GameDay Edge board
 on:
   schedule:
     - cron: "7 */3 * * *"   # every 3 hours: stats, DailyFaceoff lines, goalies, projections (no odds credits)
-    - cron: "5,25,45 18-23 * * *"   # afternoon checks: the first run at or after 2:45 PM Eastern pulls Hard Rock odds (once a day); the rest stop early
+    - cron: "5,25,45 13-23 * * *"   # daytime checks: the first run at or after the day's odds time pulls Hard Rock odds (once a day); the rest stop early
   workflow_dispatch:
     inputs:
       odds:
@@ -49,15 +49,42 @@ jobs:
           MANUAL: ${{ inputs.odds }}
         run: |
           python - >> "$GITHUB_OUTPUT" <<'PY'
-          import os, datetime, zoneinfo
+          import os, sys, csv, io, datetime, zoneinfo
+          import requests
           s, manual = os.environ.get("SCHED", ""), os.environ.get("MANUAL", "")
-          now = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
-          # GitHub often starts scheduled runs late, so odds are bought by the clock, not by which schedule fired:
-          # the first run at or after 2:45 PM Eastern buys them, and a marker file stops a second purchase that day.
-          bought = os.path.exists(f".nfl_cache/odds_bought_{now:%Y-%m-%d}")
-          due = (now.hour, now.minute) >= (14, 45)
+          ET = zoneinfo.ZoneInfo("America/New_York")
+          now = datetime.datetime.now(ET)
+          day = f"{now:%Y-%m-%d}"
+          # GitHub often starts scheduled runs late, so odds are bought by the clock, not by which schedule fired.
+          # Odds time = 2:45 PM Eastern, or 90 minutes before the day's first NHL/NFL game if that is earlier
+          # (never before 9:00 AM). The first run at or after it buys; a marker file stops a second purchase that day.
+          starts = []
+          try:
+              wk = requests.get(f"https://api-web.nhle.com/v1/schedule/{day}", timeout=20).json().get("gameWeek", [])
+              for d in wk:
+                  if d.get("date") == day:
+                      for g in d.get("games", []):
+                          if g.get("gameType") in (2, 3):
+                              t = datetime.datetime.fromisoformat(g["startTimeUTC"].replace("Z", "+00:00")).astimezone(ET)
+                              starts.append(t.hour * 60 + t.minute)
+          except Exception as e:
+              print("NHL schedule check failed:", e, file=sys.stderr)
+          try:
+              txt = requests.get("https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv", timeout=30).text
+              for g in csv.DictReader(io.StringIO(txt)):
+                  if g.get("gameday") == day and g.get("gametime"):
+                      h, m = g["gametime"].split(":")[:2]
+                      starts.append(int(h) * 60 + int(m))
+          except Exception as e:
+              print("NFL schedule check failed:", e, file=sys.stderr)
+          target = 14 * 60 + 45
+          if starts:
+              target = max(9 * 60, min(target, min(starts) - 90))
+          print(f"first game {min(starts) if starts else None} min, odds time {target // 60}:{target % 60:02d} ET", file=sys.stderr)
+          bought = os.path.exists(f".nfl_cache/odds_bought_{day}")
+          due = now.hour * 60 + now.minute >= target
           odds = manual == "true" or (bool(s) and due and not bought)
-          skip = not odds and s == "5,25,45 18-23 * * *"
+          skip = not odds and s == "5,25,45 13-23 * * *"
           print("odds=" + ("yes" if odds else "no"))
           print("skip=" + ("yes" if skip else "no"))
           PY
