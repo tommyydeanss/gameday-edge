@@ -580,6 +580,49 @@ def team_table(now_rows, last_rows):
     return out
 
 
+TEAM_PP = "https://api.nhle.com/stats/rest/en/team/powerplay"
+TEAM_PK = "https://api.nhle.com/stats/rest/en/team/penaltykill"
+ST_K = 30.0     # power-play chances of last season's rate blended into this season's power-play and penalty-kill rates
+
+
+def special_teams(season):
+    """{team key: [pp goals, pp chances, pp goals against, times shorthanded]} for one regular season."""
+    q = {"isAggregate": "false", "isGame": "false", "start": 0, "limit": -1, "cayenneExp": f"seasonId={season} and gameTypeId=2"}
+    key = lambda name: (norm_name(name).split() or [""])[-1]
+    out = {}
+    for r in (_get(TEAM_PP, q) or {}).get("data", []):
+        out[key(r["teamFullName"])] = [r.get("powerPlayGoalsFor") or 0, r.get("ppOpportunities") or 0, 0, 0]
+    for r in (_get(TEAM_PK, q) or {}).get("data", []):
+        o = out.setdefault(key(r["teamFullName"]), [0, 0, 0, 0])
+        o[2], o[3] = r.get("ppGoalsAgainst") or 0, r.get("timesShorthanded") or 0
+    return out
+
+
+def add_special_teams(tbl, names, cur, last):
+    """Adds power-play % and penalty-kill % (blended with last season early on) and their ranks to the team table."""
+    key = lambda name: (norm_name(name).split() or [""])[-1]
+    tot = [sum(v[i] for v in last.values()) for i in range(4)] if last else [0, 0, 0, 0]
+    lg_pp = tot[0] / tot[1] if tot[1] else 0.21
+    lg_pk = tot[2] / tot[3] if tot[3] else 0.21
+    for abbr, row in tbl.items():
+        k = key(names.get(abbr, abbr))
+        c, l = cur.get(k), last.get(k)
+        if not c and not l:
+            continue
+        c = c or [0, 0, 0, 0]
+        lpp = l[0] / l[1] if l and l[1] else lg_pp
+        lpk = l[2] / l[3] if l and l[3] else lg_pk
+        row["pp"] = round(100 * (c[0] + ST_K * lpp) / (c[1] + ST_K), 1)
+        row["pk"] = round(100 * (1 - (c[2] + ST_K * lpk) / (c[3] + ST_K)), 1)
+        row["ppNow"] = [c[0], c[1]]
+        row["pkNow"] = [c[3] - c[2], c[3]]
+    for k_, rk in (("pp", "ppRank"), ("pk", "pkRank")):
+        order = sorted((t for t in tbl if k_ in tbl[t]), key=lambda t: tbl[t][k_], reverse=True)
+        for i, t in enumerate(order):
+            tbl[t][rk] = i + 1
+    return tbl
+
+
 def goalie_stats(season):
     exp = f"seasonId={season} and gameTypeId=2"
     j = _get(GOALIE_STATS, {"isAggregate": "false", "isGame": "false", "start": 0, "limit": -1, "cayenneExp": exp}) or {}
@@ -1067,6 +1110,11 @@ def build(odds_key=None, book="hardrockbet_fl", odds_date=None, fetch_odds_now=T
         teams_tbl = team_table(standings_on(today.isoformat()), standings_on(f"{y0}-05-01"))
     except Exception as e:  # standings are nice-to-have
         status.append(f"NHL standings unavailable ({e}).")
+    try:
+        if teams_tbl:
+            add_special_teams(teams_tbl, names, special_teams(season), special_teams(prev))
+    except Exception as e:  # power-play and penalty-kill ranks are nice-to-have
+        status.append(f"NHL power-play and penalty-kill ranks unavailable ({e}).")
     try:
         g_cur, g_last = goalie_stats(season), goalie_stats(prev)
         days = sorted({g["day"] for g in upcoming})[:3]

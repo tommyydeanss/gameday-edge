@@ -2460,6 +2460,16 @@ button.primary:hover { box-shadow: 0 14px 34px -8px rgba(217, 70, 239, 0.8), ins
 .ticket::before { background: linear-gradient(90deg, #8b5cf6, #2dd4bf); }
 .toggle input:checked { background: linear-gradient(135deg, #8b5cf6, #d946ef); }
 a { color: #c4b5fd; }
+
+/* ---------- chances only (Oct 2026): no edges; team ranks on their own row ---------- */
+.ng-team { grid-template-columns: 44px 1fr auto; }
+.ng-ranks { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ng-ranks:empty { display: none; }
+.rk { min-width: 0; }
+.ng-team > .ng-logo, .ng-team > img { grid-row: 1; grid-column: 1; } .ng-name { grid-row: 1; grid-column: 2; min-width: 0; } .ng-ranks { grid-row: 2; }
+.ng-score { grid-row: 1; grid-column: 3; }
+@media (max-width: 560px) { .ng-team { grid-template-columns: 36px 1fr auto; } .ng-ranks { grid-template-columns: repeat(2, 1fr); } }
+.pinputs { grid-template-columns: 1fr; max-width: 7em; }
 </style>
 </head>
 <body data-sport="nhl">
@@ -3108,14 +3118,12 @@ function tdTable(rows, showGame) {
       (r.adjusted ? ` <span class="flag adj">Up: teammate out</span>` : "");
     const outBtn = r.game.hs === null ? `<button class="mini" data-out="${esc(key0)}" title="Remove this player and give his share to teammates">Mark out</button>` : "";
     const split = [r.lr > 0.005 ? `rush ${Math.round(100 * (1 - Math.exp(-r.lr)))}%` : "", r.lc > 0.005 ? `rec ${Math.round(100 * (1 - Math.exp(-r.lc)))}%` : ""].filter(Boolean).join(", ");
-    const better = r.price != null && r.edge > 0;
+    const better = false;
     const key = `${r.game.id}|${r.pid}`;
     const book = r.book != null
-      ? `<b class="${better ? "up" : "down"}">${fmtOdds(r.book)}</b>`
-      : `<input class="oin" aria-label="Enter Hard Rock odds for ${esc(r.name)}" placeholder="odds" data-k="${esc(key)}" value="${r.manual ? fmtOdds(r.price).replace("−", "-") : ""}">`;
-    const edge = r.price == null ? `<span class="sub">Enter Hard Rock's price to see the edge</span>`
-      : `<span class="edgeline ${better ? "up" : "down"}">${better ? "+" : "−"}${Math.abs(r.edge * 100).toFixed(1)}%</span>${r.manual ? `
-         <span class="sub">Your price</span>` : ""}`;
+      ? `<b>${fmtOdds(r.book)}</b>`
+      : `<b class="muted">—</b>`;
+    const edge = "";
     const result = r.scored === null ? "" : `<span class="sub">${r.scored ? `<b class="hit">Scored</b>` : "Didn't score"}</span>`;
     const mx = r.mx != null && Math.abs(r.mx) >= 0.0005 ? ` (${r.mx > 0 ? "+" : "−"}${Math.abs(r.mx * 100).toFixed(1)}%)` : "";
     const ctx = `<div class="why">
@@ -3134,7 +3142,7 @@ function tdTable(rows, showGame) {
     </tr>`;
   }).join("");
   return `<div class="tbl"><table class="tdtable"><colgroup><col class="c-player"><col class="c-a"><col class="c-b"><col class="c-c"></colgroup>
-    <thead><tr><th>Player</th><th>TD chance</th><th>Price and edge</th><th>Why</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    <thead><tr><th>Player</th><th>TD chance</th><th>Price</th><th>Why</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function injuryNote(g) {
@@ -3186,12 +3194,12 @@ function bookNote() {
   const times = [...Object.values(D.oddsTimes || {}), ...Object.values(liveOdds).filter((x) => x.book === currentBook()).map((x) => x.fetched)];
   if (times.length) {
     const latest = times.sort().pop();
-    return `Hard Rock prices last refreshed ${new Date(latest).toLocaleString("en-US", { timeZone: ET, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET; refresh before betting since lines move. Edge is the model's chance minus the chance the price implies, with the book's margin left in.`;
+    return `Hard Rock prices last refreshed ${new Date(latest).toLocaleString("en-US", { timeZone: ET, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET; refresh before betting since lines move.`;
   }
   const anyLive = Object.values(liveOdds).find((x) => x.book === currentBook());
-  if (anyLive) return `${esc(BOOKS[currentBook()])} prices loaded ${new Date(anyLive.fetched).toLocaleString("en-US", { timeZone: ET, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET; reload before betting since lines move. Edge is the model's chance minus the chance the price implies, with the book's margin left in.`;
-  if (!D.book) return `Type the prices from the Hard Rock app into the odds boxes (like +250 or -120) to see the edge; they're saved in this browser. Or rebuild with a free The Odds API key to fill them in automatically.`;
-  return `${esc(D.book.name)} prices as of ${esc(D.book.fetched)}; rebuild before betting since lines move. Edge is the model's chance minus the chance the price implies, with the book's margin left in.`;
+  if (anyLive) return `${esc(BOOKS[currentBook()])} prices loaded ${new Date(anyLive.fetched).toLocaleString("en-US", { timeZone: ET, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET; reload before betting since lines move.`;
+  if (!D.book) return `Hard Rock lines and prices show here once odds have been loaded.`;
+  return `${esc(D.book.name)} prices as of ${esc(D.book.fetched)}; rebuild before betting since lines move.`;
 }
 
 function tdPanel(g) {
@@ -3265,7 +3273,7 @@ function propRows(g, stat) {
 function oddsInputs(r) {
   const k = `${r.g.id}|${r.pid}|${r.stat}`, man = manualProps[k] || {};
   const inp = (f, ph, v) => `<input class="oin pin" data-pk="${esc(k)}" data-f="${f}" placeholder="${ph}" aria-label="${ph} for ${esc(r.name)}" value="${v == null ? "" : (f === "line" ? v : fmtOdds(v).replace("−", "-"))}">`;
-  return `<div class="pinputs">${inp("line", "Line", man.line)}${inp("over", "Over", man.over)}${inp("under", "Under", man.under)}</div>`;
+  return `<div class="pinputs">${inp("line", "Line", man.line)}</div>`;
 }
 
 function propTable(rows, showGame) {
@@ -3288,10 +3296,7 @@ function propTable(rows, showGame) {
       ? `<div class="lineb"><b>${r.line}</b><span>o ${fmtOdds(r.over)}</span><span>u ${fmtOdds(r.under)}</span></div>`
       : `${oddsInputs(r)}<span class="sub">${r.src === "manual" ? "Your line" : `No Hard Rock line yet. Model line ${r.modelLine}`}</span>`;
     const model = `<div class="ou"><span class="${pO >= 0.5 ? "up" : ""}">Over ${Math.round(pO * 100)}% <small>${fairOdds(pO)}</small></span><span class="${pU > 0.5 ? "up" : ""}">Under ${Math.round(pU * 100)}% <small>${fairOdds(pU)}</small></span></div>`;
-    const edge = r.best
-      ? `<span class="edgeline ${r.best.edge > 0.0005 ? "up" : "down"}">${r.best.side} ${Math.abs(r.best.edge) < 0.0005 ? "even" : `${r.best.edge > 0 ? "+" : "−"}${Math.abs(r.best.edge * 100).toFixed(1)}%`}</span>
-         <span class="sub">${fmtOdds(r.best.price)}</span>`
-      : `<span class="sub">Add a line and prices to see the edge</span>`;
+    const edge = "";
     const eff = P.share === "t" ? (r.stat === "rec" ? r.oe[1] : r.oe[0]) : (r.stat === "rush_yds" ? r.oe[2] : null);
     const effTxt = eff != null && Math.abs(eff - 1) >= 0.005
       ? ` (${eff > 1 ? "+" : "−"}${Math.round(Math.abs(eff - 1) * 100)}% ${r.stat === "rec" ? "catch rate" : r.stat === "rush_yds" ? "yds/carry" : "yds/target"})` : "";
@@ -3299,7 +3304,7 @@ function propTable(rows, showGame) {
     const hits = logv.filter((v) => v > line).length;
     const logTxt = logv.length ? `Last ${logv.length}: ${logv.map((v) => `<b class="${v > line ? "up" : "muted"}">${v}</b>`).join(" ")} (${hits} over)` : "No games this season";
     const result = r.actual == null ? "" : `<span class="sub">Result: <b class="${r.actual > line ? "up" : "down"}">${r.actual}</b>, ${r.actual > line ? "over" : "under"}</span>`;
-    return `<tr${r.best && r.best.edge > 0 ? ' class="value"' : ""}>
+    return `<tr>
       <td><div class="pcell">${headshot(r)}<div><span class="pos">${r.pos}</span><span class="pname">${esc(r.name)}</span>${flags}
         <span class="sub">${matchupText(r)}${showGame ? `, ${prettyTime(r.g.time)}` : ""}</span><span class="sub">${usage}</span>${outBtn}</div></div></td>
       <td><b class="big">${r.mu.toFixed(1)}</b><span class="sub">median ${r.med.toFixed(1)}</span>
@@ -3309,7 +3314,7 @@ function propTable(rows, showGame) {
     </tr>`;
   }).join("");
   return `<div class="tbl"><table class="tdtable"><colgroup><col class="c-player"><col class="c-a"><col class="c-b"><col class="c-c"></colgroup>
-    <thead><tr><th>Player</th><th>Projection</th><th>Line and model</th><th>Edge and why</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    <thead><tr><th>Player</th><th>Projection</th><th>Line and chance</th><th>Why</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function renderPropBoard(board, games) {
@@ -3318,12 +3323,11 @@ function renderPropBoard(board, games) {
   let rows = games.flatMap((g) => propRows(g, stat));
   const outRows = rows.filter((r) => r.out);
   rows = rows.filter((r) => !r.out && (state.propPos === "All" || r.pos === state.propPos));
-  if (state.propSort === "edge") rows.sort((a, b) => (b.best?.edge ?? -9) - (a.best?.edge ?? -9) || b.mu - a.mu);
-  else rows.sort((a, b) => b.mu - a.mu);
+  rows.sort((a, b) => b.mu - a.mu);
   const btns = (items, cur, attr) => `<div class="posf" role="group">${items.map(([k, l]) =>
     `<button ${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
   board.innerHTML = `<div class="tdwrap"><div class="tdhead"><h2>${P.label}</h2>
-    <div class="controls">${btns(choices, stat, "data-ps")}${btns([["edge", "Sort by edge"], ["proj", "Sort by projection"]], state.propSort, "data-sort")}
+    <div class="controls">${btns(choices, stat, "data-ps")}
     ${btns([["All", "All"], ...P.pos.map((p) => [p, p])], state.propPos, "data-pp")}
     <button id="exportProps">Export CSV</button></div></div>
     <details class="howto"><summary>How this is calculated</summary><p class="tdctx">Projection = the player's expected ${P.unit} tonight: his team's expected ${P.share === "t" ? "targets" : "carries"} (this season plus the last three, adjusted for the point spread, the Vegas total, both teams' pace, this defense and the kickoff forecast for wind and cold) times his share (nudged up or down when his recent snap count changes), times his ${stat === "rec" ? "catch rate" : stat === "rec_yds" ? "yards per target" : stat === "rush_yds" ? "yards per carry" : "carries"}${stat === "rush_att" ? "" : " regressed to his position and adjusted for this defense, missing defensive backs, and his starting quarterback's accuracy"}. Over/under chances use the real game-to-game spread from 2024–25 backtests. Type Hard Rock's line and prices into the boxes, or Refresh with your key to fill them. ${bookNote()}</p></details>
@@ -3357,15 +3361,14 @@ function renderTDBoard(board, games) {
   const outRows = rows.filter((r) => r.out);
   rows = rows.filter((r) => !r.out);
   if (state.tdPos !== "All") rows = rows.filter((r) => r.pos === state.tdPos);
-  if (state.tdSort === "edge") rows = rows.filter((r) => r.edge != null).sort((a, b) => b.edge - a.edge);
-  else rows.sort((a, b) => b.p - a.p);
-  const noPrices = state.tdSort === "edge" && !rows.length;
-  const sortBtns = true ? `<div class="posf" role="group" aria-label="Sort">${[["chance", "Sort by TD chance"], ["edge", "Sort by edge"]].map(([k, l]) =>
+  rows.sort((a, b) => b.p - a.p);
+  const noPrices = false;
+  const sortBtns = false ? `<div class="posf" role="group" aria-label="Sort">${[["chance", "Sort by TD chance"], ["edge", "Sort by edge"]].map(([k, l]) =>
     `<button data-s="${k}" aria-pressed="${state.tdSort === k}">${l}</button>`).join("")}</div>` : "";
   board.innerHTML = `<div class="tdwrap"><div class="tdhead"><h2>Touchdown board</h2>
     <div class="controls">${sortBtns}<div class="posf" role="group" aria-label="Position">${["All", "QB", "RB", "WR", "TE"].map((p) =>
       `<button data-p="${p}" aria-pressed="${state.tdPos === p}">${p}</button>`).join("")}</div></div></div>
-    <details class="howto"><summary>How this is calculated</summary><p class="tdctx">Every projected scorer in the selected games. Players listed Out or Doubtful on the official injury report, or who missed their team's last two games, are left out and their share goes to teammates. News after the report (like a surprise inactive) isn't included: use Mark out, and teammates' chances update. ${bookNote()} The model blends this season with the last three (older seasons count less), adjusts older usage for each player's age curve, and values chances by field position so lucky or unlucky TD streaks regress. In backtests on 2024 and 2025, these probabilities beat position-average baselines by about 8% (Brier score) and were well calibrated from 5% to 50%; picks above 50% ran a few points hot, so treat small edges as noise.</p></details>
+    <details class="howto"><summary>How this is calculated</summary><p class="tdctx">Every projected scorer in the selected games. Players listed Out or Doubtful on the official injury report, or who missed their team's last two games, are left out and their share goes to teammates. News after the report (like a surprise inactive) isn't included: use Mark out, and teammates' chances update. ${bookNote()} The model blends this season with the last three (older seasons count less), adjusts older usage for each player's age curve, and values chances by field position so lucky or unlucky TD streaks regress. In backtests on 2024 and 2025, these probabilities beat position-average baselines by about 8% (Brier score) and were well calibrated from 5% to 50%; picks above 50% ran a few points hot.</p></details>
     ${games.map(injuryNote).join("")}
     ${noPrices ? `<p class="note">No odds for these games yet. Switch to Sort by TD chance and type Hard Rock's prices into the odds boxes, or rebuild with an Odds API key.</p>` : tdTable([...rows.slice(0, 60), ...outRows], true)}</div>`;
   board.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => { state.tdPos = b.dataset.p; render(); }));
@@ -3598,8 +3601,8 @@ function renderNHL(board) {
     ? `${dayGames.length} NHL game${dayGames.length > 1 ? "s" : ""}, ${prettyTime(dayGames.map((g) => g.time).sort()[0])} ET first puck drop`
     : "No NHL games";
   $("note").textContent = stat === "sog"
-    ? `Expected shots on goal = his shot attempts per 60 (shots on goal + missed + blocked, which is steadier than shots alone; blended toward what players with his even-strength ice time take) × the share of his attempts that reach the net × projected minutes, where a power-play minute counts about 3 even-strength minutes (shots come much faster on the power play), × how many shots the opponent allows × a little for how much his own team shoots × a small home edge, × 0.95 on the second night of a back-to-back, × a linemate factor (tonight's DailyFaceoff linemates' scoring rate vs his usual linemates, softened), × a rink factor (some arenas' scorers record more or fewer shots; his past shots are de-biased the same way), with power-play minutes scaled by how often the opponent takes penalties. Rookies (flagged on their cards): with few NHL games, minutes lean on tonight's DailyFaceoff line slot and the shot rate starts from players in similar roles (20% lower for rookies outside top-6/PP1 roles, fading as they play), so treat their edges with extra caution. Projected minutes follow his recent ice time, nudged toward tonight's DailyFaceoff line and power-play unit. Chance of going over uses a Poisson curve. Backtested walk-forward on the second half of 2025-26: log-loss 0.438 across the 1.5, 2.5 and 3.5 lines vs 0.509 for a league-average guess, and well calibrated. Edge compares the model to Hard Rock's price (vig included). Data from the NHL API and DailyFaceoff, built ${ND?.generated || "—"}.`
-    : `Expected points = even-strength points per 60 (blended toward what players with his ice time produce) × projected even-strength minutes, plus power-play points per 60 × projected power-play minutes, × how many goals the opponent allows × a small home edge. Once Hard Rock posts the game's moneyline and total, projections are also nudged halfway toward the team goals those lines imply (capped at 15%). Even-strength scoring is nudged by tonight's linemates (their scoring rate vs his usual linemates, softened), and power-play minutes by how often the opponent takes penalties. Projected minutes start from his recent ice time and are nudged toward what tonight's DailyFaceoff line and power-play unit usually get (partial weight, since projected lines change). Chance of going over uses a Poisson curve. Backtested walk-forward on every 2025-26 regular-season game and well calibrated for the 0.5 and 1.5 lines. Rookies (flagged on their cards): with few NHL games, projected minutes lean on tonight's DailyFaceoff line slot and the scoring rate starts from players in similar roles, a bit lower for rookies outside top-6/PP1 roles, so their edges are less certain. Players DailyFaceoff lists as injured or leaves out of the lineup are hidden by default; lines marked "projected" can still change at morning skate. Edge compares the model to Hard Rock's price (vig included); the pick shows whichever side, Over or Under, is better. Data from the NHL API and DailyFaceoff, built ${ND?.generated || "—"}.`;
+    ? `Expected shots on goal = his shot attempts per 60 (shots on goal + missed + blocked, which is steadier than shots alone; blended toward what players with his even-strength ice time take) × the share of his attempts that reach the net × projected minutes, where a power-play minute counts about 3 even-strength minutes (shots come much faster on the power play), × how many shots the opponent allows × a little for how much his own team shoots × a small home edge, × 0.95 on the second night of a back-to-back, × a linemate factor (tonight's DailyFaceoff linemates' scoring rate vs his usual linemates, softened), × a rink factor (some arenas' scorers record more or fewer shots; his past shots are de-biased the same way), with power-play minutes scaled by how often the opponent takes penalties. Rookies (flagged on their cards): with few NHL games, minutes lean on tonight's DailyFaceoff line slot and the shot rate starts from players in similar roles (20% lower for rookies outside top-6/PP1 roles, fading as they play), so treat their chances with extra caution. Projected minutes follow his recent ice time, nudged toward tonight's DailyFaceoff line and power-play unit. Chance of going over uses a Poisson curve. Backtested walk-forward on the second half of 2025-26: log-loss 0.438 across the 1.5, 2.5 and 3.5 lines vs 0.509 for a league-average guess, and well calibrated. Data from the NHL API and DailyFaceoff, built ${ND?.generated || "—"}.`
+    : `Expected points = even-strength points per 60 (blended toward what players with his ice time produce) × projected even-strength minutes, plus power-play points per 60 × projected power-play minutes, × how many goals the opponent allows × a small home edge. Once Hard Rock posts the game's moneyline and total, projections are also nudged halfway toward the team goals those lines imply (capped at 15%). Even-strength scoring is nudged by tonight's linemates (their scoring rate vs his usual linemates, softened), and power-play minutes by how often the opponent takes penalties. Projected minutes start from his recent ice time and are nudged toward what tonight's DailyFaceoff line and power-play unit usually get (partial weight, since projected lines change). Chance of going over uses a Poisson curve. Backtested walk-forward on every 2025-26 regular-season game and well calibrated for the 0.5 and 1.5 lines. Rookies (flagged on their cards): with few NHL games, projected minutes lean on tonight's DailyFaceoff line slot and the scoring rate starts from players in similar roles, a bit lower for rookies outside top-6/PP1 roles, so their chances are less certain. Players DailyFaceoff lists as injured or leaves out of the lineup are hidden by default; lines marked "projected" can still change at morning skate. Data from the NHL API and DailyFaceoff, built ${ND?.generated || "—"}.`;
   if (!ND || ND.error) {
     board.innerHTML = `<div class="error"><h2>NHL data isn't loaded</h2><p>${ND?.error ? `The last refresh hit a problem: ${esc(ND.error)}` : "Put nhl_props.py next to nfl_board.py, then click Refresh (or restart Start NFL Board)."}</p></div>`;
     return;
@@ -3620,7 +3623,7 @@ function renderNHL(board) {
   const live = rows.filter((r) => !r.out), outRows = rows.filter((r) => r.out);
   const byChance = stat === "sog" ? (a, b) => b.lam - a.lam : (a, b) => b.p - a.p;
   const byEdge = (a, b) => (b.best.ev ?? -1e9) - (a.best.ev ?? -1e9) || byChance(a, b);
-  live.sort(state.nhlSort === "edge" ? byEdge : byChance);
+  live.sort(byChance);
   rows = [...live, ...outRows];
   const shown = rows.slice(0, 160);
 
@@ -3634,8 +3637,7 @@ function renderNHL(board) {
       <div class="controls"><button id="nhlExport">Export CSV</button></div></div>
     <div class="nhlsum">
       <div class="stat glass"><small>Games</small><b>${dayGames.length}</b></div>
-      <div class="stat glass"><small>Priced props</small><b>${priced.length}</b></div>
-      <div class="stat glass"><small>Value plays (3%+ edge)</small><b class="${value.length ? "up" : ""}">${value.length}</b></div>
+      <div class="stat glass"><small>Hard Rock lines</small><b>${priced.length}</b></div>
       <div class="stat glass"><small>${stat === "sog" ? "Most shots expected" : "Most likely"}</small><b style="font-size:1.1rem">${top ? `${esc(top.name)} ${stat === "sog" ? top.lam.toFixed(1) : pct(top.p)}` : "—"}</b></div>
     </div>
     <div class="gamepills" role="group" aria-label="Game">
@@ -3645,18 +3647,13 @@ function renderNHL(board) {
     </div>
     <div class="nhlbar">
       <span class="lbl">Position</span><div class="posf">${["All", "F", "D"].map((p) => pill("data-np", p, p === "F" ? "Forwards" : p === "D" ? "Defense" : "All", state.nhlPos)).join("")}</div>
-      <span class="lbl">Sort</span><div class="posf">${pill("data-ns", "edge", "Best edge", state.nhlSort)}${pill("data-ns", "chance", stat === "sog" ? "Most shots" : "Chance", state.nhlSort)}</div>
       <span class="lbl">View</span><div class="posf">${pill("data-nv", "cards", "Cards", state.nhlLayout)}${pill("data-nv", "table", "Table", state.nhlLayout)}</div>
       <label class="toggle"><input type="checkbox" id="nhlHide" ${state.nhlHide ? "checked" : ""}> Hide players out or not in lineup</label>
     </div>
-    ${value.length && state.nhlLayout !== "cards" ? `<section class="edges"><h2>Best edges</h2><div class="ticketrow">${value.slice(0, 6).map((r) => `
-      <button class="ticket" data-jump="${esc(r.key)}">${nPhoto(r)}<div class="who">${esc(r.name)}<small>${r.team}</small></div>
-        <div class="bet">${r.best.side} ${r.line} ${NHL_STAT[stat].unit === "pts" ? "points" : "shots"} · ${fmtOdds(r.best.price)}</div>
-        <div class="val"><b>+${(r.best.edge * 100).toFixed(1)}%</b><span>edge</span></div></button>`).join("")}</div></section>` : ""}
     ${state.nhlLayout === "cards"
       ? `<div class="pgrid">${shown.map((r) => nhlCard(r)).join("")}</div>`
-      : `<div class="tbl"><table class="tdtable"><colgroup><col class="c-player"><col class="c-a"><col class="c-b"><col class="c-c"></colgroup>
-      <thead><tr><th>Player</th><th>Model</th><th>Hard Rock</th><th>Edge</th></tr></thead>
+      : `<div class="tbl"><table class="tdtable"><colgroup><col class="c-player"><col class="c-a"><col class="c-b"></colgroup>
+      <thead><tr><th>Player</th><th>Chance</th><th>Hard Rock line</th></tr></thead>
       <tbody>${shown.map((r) => nhlRow(r, stat)).join("")}</tbody></table></div>`}
     ${rows.length > shown.length ? `<p class="note">Showing the top ${shown.length} of ${rows.length}. Pick a game above to see everyone.</p>` : ""}
   </div>`;
@@ -3683,7 +3680,8 @@ function renderNHL(board) {
   });
   board.querySelectorAll("select[data-nml]").forEach((el) => el.addEventListener("change", () => {
     const m = nhlManual[el.dataset.nml];
-    if (m && typeof m === "object") { m.line = Number(el.value); store.set(NHL_MAN, nhlManual); }
+    nhlManual[el.dataset.nml] = { line: Number(el.value), price: m && typeof m === "object" ? m.price ?? null : null };
+    store.set(NHL_MAN, nhlManual);
     render();
   }));
 }
@@ -3693,7 +3691,7 @@ const ord2 = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n 
 function rankPill(label, rank, val, unit) {
   if (!rank) return "";
   const h = Math.round(135 * (1 - (rank - 1) / 31));
-  return `<div class="rk" style="--h:${h}"><small>${label}</small><b>${ord2(rank)}</b><em>${val.toFixed(2)} ${unit}</em></div>`;
+  return `<div class="rk" style="--h:${h}"><small>${label}</small><b>${ord2(rank)}</b><em>${unit === "%" ? `${val.toFixed(1)}%` : `${val.toFixed(2)} ${unit}`}</em></div>`;
 }
 function goalieRow(gl) {
   if (!gl) return `<div class="ng-goalie none"><span class="gmask" aria-hidden="true"></span><span class="muted">Starter not posted yet</span></div>`;
@@ -3720,7 +3718,7 @@ function nhlGameCard(g) {
     return `<div class="ng-team ${win && win !== abbr ? "lost" : ""}">
       ${nLogo(abbr, "ng-logo")}
       <div class="ng-name"><b>${esc(nm)}</b><small>${esc(rec)}${lastRec ? `<br>${esc(lastRec)}` : ""}</small></div>
-      <div class="ng-ranks">${t ? rankPill("Offense", t.offRank, t.gfpg, "GF/G") + rankPill("Defense", t.defRank, t.gapg, "GA/G") : ""}</div>
+      <div class="ng-ranks">${t ? rankPill("Offense", t.offRank, t.gfpg, "GF/G") + rankPill("Defense", t.defRank, t.gapg, "GA/G") + rankPill("Power play", t.ppRank, t.pp ?? 0, "%") + rankPill("Penalty kill", t.pkRank, t.pk ?? 0, "%") : ""}</div>
       ${final || live ? `<div class="ng-score">${score ?? ""}</div>` : ""}
     </div>${goalieRow(GL[abbr])}`;
   };
@@ -3760,7 +3758,8 @@ function renderNHLGames(board) {
     ? `${dayGames.length} NHL game${dayGames.length > 1 ? "s" : ""}, ${prettyTime(dayGames.map((g) => g.time).sort()[0])} ET first puck drop` : "No NHL games";
   const TS = ND?.teamStats || {}, early = Object.values(TS).length && Object.values(TS).every((t) => t.gp < 10);
   $("note").textContent = `Offense rank = goals scored per game, defense rank = goals allowed per game (1st is best), across all 32 teams.` +
-    (early ? " Early in the season the ranks blend in last season's scoring rate (worth about 10 games) so one or two games don't swing them." : "") +
+    ` Power play rank = share of power plays that score, penalty kill rank = share of opponent power plays stopped.` +
+    (early ? " Early in the season the ranks blend in last season's rates (worth about 10 games) so one or two games don't swing them." : "") +
     ` Starting goalies come from DailyFaceoff: Confirmed means a team or beat reporter said so; Likely and Projected can still change, so check before puck drop. Records from the NHL, built ${ND?.generated || "—"}.`;
   if (!ND || ND.error) {
     board.innerHTML = `<div class="error"><h2>NHL data isn't loaded</h2><p>${ND?.error ? esc(ND.error) : "Put nhl_props.py next to nfl_board.py, then click Refresh."}</p></div>`;
@@ -3816,27 +3815,25 @@ function nhlCard(r) {
   if (r.out) return `<article class="pcard outcard" data-row="${esc(r.key)}"><div class="pc-top">${bigPhoto(r)}<div class="pc-who">
       <div class="pc-name">${esc(r.name)}</div><div class="pc-meta">Marked out</div></div>
       <button class="mini" data-nout="${esc(r.key)}">Undo</button></div></article>`;
-  const val = !isFinal && r.best.edge != null && r.best.edge >= 0.03;
+  const val = false;
   const flags = [];
   if (r.lik && !r.lu) flags.push(`<span class="warnpill">Didn't play team's last ${r.dressed[1]}</span>`);
   const F = nhlFactors(r);
   if (Math.abs(F.lm - 1) >= 0.04) flags.push(`<span class="${F.lm > 1 ? "lupill" : "warnpill"}" title="Tonight's DailyFaceoff linemates vs the linemates he usually plays with">${F.lm > 1 ? "Better" : "Weaker"} linemates ${factorPct(F.lm)}</span>`);
-  if (!r.career) flags.push(`<span class="warnpill" title="No NHL history: minutes come from his DailyFaceoff line slot and his rate from players in similar roles. Treat edges with extra caution.">Rookie · NHL debut</span>`);
-  else if (r.career < 20) flags.push(`<span class="warnpill" title="Little NHL history: the model leans on his line slot and role, so edges are less certain.">Rookie · ${r.career} NHL GP</span>`);
+  if (!r.career) flags.push(`<span class="warnpill" title="No NHL history: minutes come from his DailyFaceoff line slot and his rate from players in similar roles. Treat his chance with extra caution.">Rookie · NHL debut</span>`);
+  else if (r.career < 20) flags.push(`<span class="warnpill" title="Little NHL history: the model leans on his line slot and role, so his chance is less certain.">Rookie · ${r.career} NHL GP</span>`);
   const S = NHL_STAT[r.stat || "pts"];
   const lineSel = (cur) => `<select class="lsel" data-nml="${esc(r.mk)}" aria-label="Line">${S.lines.map((v) => `<option value="${v}" ${v === cur ? "selected" : ""}>${v}</option>`).join("")}</select>`;
-  const price = (side, v) => `<div class="pc-price ${r.best.side === side && r.best.edge > 0 ? "good" : ""}"><small>${side === "Over" ? "Over" : "Under"} ${line}</small><b>${fmtOdds(v) || "—"}</b></div>`;
+  const price = (side, v) => `<div class="pc-price"><small>${side === "Over" ? "Over" : "Under"} ${line}</small><b>${fmtOdds(v) || "—"}</b></div>`;
   const market = r.hasBook
     ? `<div class="pc-market"><div class="pc-line"><small>Hard Rock line</small><b>${line}</b></div>${price("Over", r.over)}${price("Under", r.under)}</div>
        ${r.alts?.length ? `<div class="pc-alts">Also ${r.alts.map((x) => `${x[0]}: ${fmtOdds(x[1]) || "—"} / ${fmtOdds(x[2]) || "—"}`).join(" · ")}</div>` : ""}`
     : isFinal ? ""
-    : `<div class="pc-manual"><span>${r.manual ? "Your price" : "No Hard Rock line yet"}</span>
-         <div class="manrow">Over ${lineSel(line)}<input class="oin" data-nm="${esc(r.mk)}" placeholder="odds" value="${r.manual ? fmtOdds(r.over).replace("−", "-") : ""}" aria-label="Your Over odds for ${esc(r.name)}"></div></div>`;
+    : `<div class="pc-manual"><span>${r.manual ? "Your line" : "No Hard Rock line yet"}</span>
+         <div class="manrow">Chance of over ${lineSel(line)}</div></div>`;
   const edge = isFinal
     ? `<div class="pc-edge ${r.hit ? "win" : "loss"}"><span>${r.resv} ${S.unit}</span><b>${r.hit ? `Over ${line} hit` : `Under ${line}`}</b></div>`
-    : r.best.edge != null
-      ? `<div class="pc-edge ${r.best.edge > 0 ? "pos" : "neg"}"><span>${r.best.side} ${line}</span><b>${r.best.edge >= 0 ? "+" : "−"}${Math.abs(r.best.edge * 100).toFixed(1)}%</b></div>`
-      : `<div class="pc-edge none"><span>Edge</span><b>Needs odds</b></div>`;
+    : "";
   const toiTxt = r.toi0 != null && Math.abs(r.toi - r.toi0) >= 0.5 ? ` <i>${r.toi > r.toi0 ? "▲" : "▼"}</i>` : "";
   return `<article class="pcard ${val ? "value" : ""}" data-row="${esc(r.key)}">
     <div class="pc-top">${bigPhoto(r)}
@@ -3862,26 +3859,26 @@ function nhlRow(r, stat) {
   else if (!r.lu && r.dressed && r.dressed[0] < r.dressed[1]) flags.push(`<span>Played ${r.dressed[0]} of last ${r.dressed[1]}</span>`);
   const F = nhlFactors(r);
   if (Math.abs(F.lm - 1) >= 0.04) flags.push(`<span class="${F.lm > 1 ? "lupill" : "warnpill"}" title="Tonight's DailyFaceoff linemates vs the linemates he usually plays with">${F.lm > 1 ? "Better" : "Weaker"} linemates ${factorPct(F.lm)}</span>`);
-  if (!r.career) flags.push(`<span class="warnpill" title="No NHL history: minutes come from his DailyFaceoff line slot and his rate from players in similar roles. Treat edges with extra caution.">Rookie · NHL debut</span>`);
-  else if (r.career < 20) flags.push(`<span class="warnpill" title="Little NHL history: the model leans on his line slot and role, so edges are less certain.">Rookie · ${r.career} NHL GP</span>`);
-  if (r.out) return `<tr class="outrow" data-row="${esc(r.key)}"><td colspan="4"><div class="pcell">${nPhoto(r)}<div><div class="pname">${esc(r.name)}</div>
+  if (!r.career) flags.push(`<span class="warnpill" title="No NHL history: minutes come from his DailyFaceoff line slot and his rate from players in similar roles. Treat his chance with extra caution.">Rookie · NHL debut</span>`);
+  else if (r.career < 20) flags.push(`<span class="warnpill" title="Little NHL history: the model leans on his line slot and role, so his chance is less certain.">Rookie · ${r.career} NHL GP</span>`);
+  if (r.out) return `<tr class="outrow" data-row="${esc(r.key)}"><td colspan="3"><div class="pcell">${nPhoto(r)}<div><div class="pname">${esc(r.name)}</div>
       <span class="sub">Marked out.</span><button class="mini" data-nout="${esc(r.key)}">Undo</button></div></div></td></tr>`;
   const isFinal = r.res != null;
   const altTxt = r.alts?.length ? `<span class="sub">Also: ${r.alts.map((x) => `${x[0]} ${fmtOdds(x[1]) || "—"}/${fmtOdds(x[2]) || "—"}`).join(" · ")}</span>` : "";
   const lineSel = (cur) => `<select class="lsel" data-nml="${esc(r.mk)}" aria-label="Line">${NHL_STAT[stat].lines.map((v) => `<option value="${v}" ${v === cur ? "selected" : ""}>${v}</option>`).join("")}</select>`;
   const book = r.hasBook
     ? `<div class="hrline">Hard Rock line <b>${line}</b></div>
-       <div class="pricepair"><span><small>Over ${line}</small><b class="${r.best.side === "Over" && r.best.edge > 0 ? "up" : ""}">${fmtOdds(r.over) || "—"}</b></span>
-        <span><small>Under ${line}</small><b class="${r.best.side === "Under" && r.best.edge > 0 ? "up" : ""}">${fmtOdds(r.under) || "—"}</b></span></div>
+       <div class="pricepair"><span><small>Over ${line}</small><b>${fmtOdds(r.over) || "—"}</b></span>
+        <span><small>Under ${line}</small><b>${fmtOdds(r.under) || "—"}</b></span></div>
        ${r.noVig != null ? `<span class="sub">No-vig Over ${pct(r.noVig)}</span>` : ""}${altTxt}`
     : isFinal ? `<span class="muted">—</span>`
-    : `<div class="manrow">Over ${lineSel(line)}<input class="oin" data-nm="${esc(r.mk)}" placeholder="odds" value="${r.manual ? fmtOdds(r.over).replace("−", "-") : ""}" aria-label="Your Over odds for ${esc(r.name)}"></div>
-       <span class="sub">${r.manual ? "Your price (Hard Rock hasn't posted this player)." : "Not posted yet. Click Refresh, or type a price."}</span>`;
+    : `<div class="manrow">Chance of over ${lineSel(line)}</div>
+       <span class="sub">${r.manual ? "Your line (Hard Rock hasn't posted this player)." : "Hard Rock hasn't posted this player yet. Pick a line to see his chance."}</span>`;
   const edge = r.best.edge != null
     ? `<div class="sidepick">${r.best.side}</div><div class="edgeline ${r.best.edge > 0 ? "up" : "down"}">${r.best.edge >= 0 ? "+" : "−"}${Math.abs(r.best.edge * 100).toFixed(1)}%</div>`
     : `<span class="muted">Needs odds</span>`;
   const result = isFinal ? `<span class="nres ${r.hit ? "win" : "loss"}">${r.resv} ${unit} · ${r.hit ? "Over hit" : "Under"}</span>` : "";
-  const val = !isFinal && r.best.edge != null && r.best.edge >= 0.03;
+  const val = false;
   return `<tr class="${val ? "value" : ""}" data-row="${esc(r.key)}">
     <td><div class="pcell">${nPhoto(r)}<div><div class="pname">${esc(r.name)}</div>
       <span class="sub"><span class="pos">${posName}</span>${r.home ? "vs" : "@"} ${esc(r.opp)} · ${prettyTime(r.g.time)}</span>
@@ -3892,8 +3889,7 @@ function nhlRow(r, stat) {
       <span class="sub">Fair ${fairOdds(r.p)} · expects ${r.lam.toFixed(2)} ${unit}</span>
       <span class="sub">${stat === "sog" ? `${(r.s60 ?? 0).toFixed(2)} SOG per 60 · opp/team factor ${(r.senv ?? 1).toFixed(2)}` : `${r.p60.toFixed(2)} per 60 · opp factor ${r.env.toFixed(2)}`}</span>
       ${(() => { const F = nhlFactors(r); return `<span class="sub">Linemates ${factorPct(F.lm)} · PP chances ${factorPct(F.pp)}${stat === "sog" ? ` · rink ${factorPct(F.rink)}` : (r.mkt ? ` · Hard Rock game line ${factorPct(F.mkt)}` : "")}</span>`; })()}</td>
-    <td>${book}</td>
-    <td class="edgecell">${edge}</td></tr>`;
+    <td>${book}</td></tr>`;
 }
 
 function nhlExport(rows, stat) {
