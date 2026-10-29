@@ -1,6 +1,6 @@
 # NHL props vs Hard Rock: results so far
 
-Updated Oct 28, 2026 08:47 PM ET. Every player Hard Rock priced is logged; the pick is the side (Over or Under) the model rated better at Hard Rock's price. Profit assumes $100 on every pick.
+Updated Oct 28, 2026 11:44 PM ET. Every player Hard Rock priced is logged; the pick is the side (Over or Under) the model rated better at Hard Rock's price. Profit assumes $100 on every pick.
 
 ## Record
 
