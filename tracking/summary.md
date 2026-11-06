@@ -1,6 +1,6 @@
 # NHL props vs Hard Rock: results so far
 
-Updated Nov 06, 2026 11:41 AM ET. Every player Hard Rock priced is logged; the pick is the side (Over or Under) the model rated better at Hard Rock's price. Profit assumes $100 on every pick.
+Updated Nov 06, 2026 02:53 PM ET. Every player Hard Rock priced is logged; the pick is the side (Over or Under) the model rated better at Hard Rock's price. Profit assumes $100 on every pick.
 
 ## Record
 
@@ -35,4 +35,4 @@ Updated Nov 06, 2026 11:41 AM ET. Every player Hard Rock priced is logged; the p
 | shots | 40%-60% | 1594 | 47.7% | 49.7% |
 | shots | 60%-80% | 344 | 57.6% | 57.4% |
 
-Settled props: 4724. Waiting for results: 34. Small samples swing a lot; judge after a few hundred settled picks.
+Settled props: 4724. Waiting for results: 148. Small samples swing a lot; judge after a few hundred settled picks.
